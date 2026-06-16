@@ -21,6 +21,8 @@ class ProjectSettings:
     threshold_mode: str = "otsu"
     layers: int = 5
     remove_bg: bool = False
+    smoothing: int = 2  # 0=off, 1=low, 2=medium (default — good for photos), 3=high
+    fit_aspect: bool = True  # treat width_mm/height_mm as a bounding box; preserve image aspect
     material: str | None = None
     width_mm: float = 200.0
     height_mm: float = 200.0
@@ -62,6 +64,8 @@ def from_json(raw: str) -> tuple[ProjectSettings, str]:
         threshold_mode=s["threshold_mode"],
         layers=s["layers"],
         remove_bg=s["remove_bg"],
+        smoothing=s.get("smoothing", 2),
+        fit_aspect=s.get("fit_aspect", True),
         material=s.get("material"),
         width_mm=s["width_mm"],
         height_mm=s["height_mm"],

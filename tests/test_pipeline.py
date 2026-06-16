@@ -35,3 +35,26 @@ def test_kerf_zero_when_subpixel_emits_note(line_art_bytes: bytes) -> None:
     settings = ProjectSettings(layers=2, kerf_mm=0.0001, width_mm=200.0)
     result = pipeline.process(line_art_bytes, settings)
     assert any("Kerf" in note for note in result.notes)
+
+
+def test_fit_aspect_preserves_image_aspect(flower_bytes: bytes) -> None:
+    # The flower fixture is 128x128 → square, no change expected.
+    # Build a non-square test image inline using PIL and feed it in.
+    from io import BytesIO
+
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGB", (300, 100), (50, 50, 50)).save(buf, format="PNG")
+    image_bytes = buf.getvalue()
+
+    fit = pipeline.process(image_bytes, ProjectSettings(layers=2, width_mm=200, height_mm=200, kerf_mm=0))
+    stretched = pipeline.process(
+        image_bytes,
+        ProjectSettings(layers=2, width_mm=200, height_mm=200, kerf_mm=0, fit_aspect=False),
+    )
+    # In fit mode the height shrinks to preserve the 3:1 aspect → 200x66.67mm.
+    assert fit.canvas_mm[0] == 200
+    assert fit.canvas_mm[1] < 100
+    # In stretch mode we honor the literal dims.
+    assert stretched.canvas_mm == (200, 200)

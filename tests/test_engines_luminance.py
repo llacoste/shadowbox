@@ -61,3 +61,26 @@ def test_unknown_mode_raises() -> None:
 def test_zero_layers_rejected() -> None:
     with pytest.raises(ValueError, match="n_layers"):
         LuminanceEngine().slice(_gradient(32), n_layers=0)
+
+
+def test_smoothing_removes_isolated_specks() -> None:
+    """Single-pixel dark specks on a bright field should be erased at smoothing>=2."""
+    # Bright canvas (gray=240) with isolated 1-pixel dark specks (gray=40).
+    # The front layer's mask captures only dark pixels — each speck becomes a
+    # tiny True island. Opening drops islands smaller than the disk radius.
+    canvas = np.full((64, 64), 240, dtype=np.uint8)
+    rng = np.random.default_rng(seed=7)
+    ys = rng.integers(4, 60, size=150)
+    xs = rng.integers(4, 60, size=150)
+    canvas[ys, xs] = 40
+
+    engine = LuminanceEngine()
+    raw = engine.slice(canvas, n_layers=2, threshold_mode="equal", smoothing=0)
+    cleaned = engine.slice(canvas, n_layers=2, threshold_mode="equal", smoothing=2)
+
+    # Front (front-most) mask: dark pixels only. Raw should keep most specks
+    # as True; cleaned should drop nearly all of them.
+    front_raw = raw[-1]
+    front_clean = cleaned[-1]
+    assert front_raw.sum() > 100  # most specks present
+    assert front_clean.sum() < front_raw.sum() / 3  # opening killed the islands

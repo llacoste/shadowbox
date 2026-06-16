@@ -21,7 +21,19 @@ from typing import ClassVar
 
 import numpy as np
 from PIL import Image
+from scipy.ndimage import binary_closing, binary_opening
 from skimage.filters import threshold_multiotsu
+
+# Structuring-element radii per smoothing level. Opening (erode→dilate) drops
+# tiny True specks; closing (dilate→erode) fills small False holes. Together
+# they take a photograph's noisy threshold output from "hundreds of floating
+# islands" to "a handful of cuttable shapes".
+_MORPHOLOGY_BY_LEVEL: dict[int, tuple[int, int]] = {
+    0: (0, 0),
+    1: (1, 1),
+    2: (2, 2),
+    3: (4, 3),
+}
 
 
 class LuminanceEngine:
@@ -34,6 +46,7 @@ class LuminanceEngine:
         *,
         threshold_mode: str = "otsu",
         invert_layers: tuple[int, ...] = (),
+        smoothing: int = 2,
     ) -> list[np.ndarray]:
         if n_layers < 1:
             raise ValueError(f"n_layers must be >= 1, got {n_layers}")
@@ -48,8 +61,26 @@ class LuminanceEngine:
         thresholds = sorted(thresholds, reverse=True)
         masks = [(gray <= t) for t in thresholds]
 
+        opening_r, closing_r = _MORPHOLOGY_BY_LEVEL.get(smoothing, _MORPHOLOGY_BY_LEVEL[2])
+        if opening_r or closing_r:
+            masks = [_cleanup(m, opening_r, closing_r) for m in masks]
+
         invert_set = {i - 1 for i in invert_layers}
         return [np.logical_not(m) if i in invert_set else m for i, m in enumerate(masks)]
+
+
+def _cleanup(mask: np.ndarray, opening_r: int, closing_r: int) -> np.ndarray:
+    out = mask
+    if opening_r > 0:
+        out = binary_opening(out, structure=_disk(opening_r))
+    if closing_r > 0:
+        out = binary_closing(out, structure=_disk(closing_r))
+    return out
+
+
+def _disk(radius: int) -> np.ndarray:
+    y, x = np.ogrid[-radius : radius + 1, -radius : radius + 1]
+    return x * x + y * y <= radius * radius
 
 
 def _to_grayscale(image: np.ndarray) -> np.ndarray:

@@ -59,6 +59,15 @@
           </div>
           <label class="toggle"><input type="checkbox" name="remove_bg" value="true"><span>Remove background (rembg)</span></label>
           <div class="field">
+            <label class="field-label">Smoothing <span style="color:var(--ink-3)">(photos need at least Medium)</span></label>
+            <div class="segment">
+              <label><input type="radio" name="smoothing" value="0"><span>Off</span></label>
+              <label><input type="radio" name="smoothing" value="1"><span>Low</span></label>
+              <label><input type="radio" name="smoothing" value="2" checked><span>Medium</span></label>
+              <label><input type="radio" name="smoothing" value="3"><span>High</span></label>
+            </div>
+          </div>
+          <div class="field">
             <label class="field-label">Invert layers <span style="color:var(--ink-3)">(1-based, comma-separated)</span></label>
             <input type="text" name="invert_layers" placeholder="e.g. 2,4">
           </div>
@@ -77,14 +86,15 @@
           </div>
           <div class="field-row">
             <div class="field">
-              <label class="field-label">Width (mm)</label>
+              <label class="field-label">Max width (mm)</label>
               <input type="number" name="width_mm" step="0.1" value="200">
             </div>
             <div class="field">
-              <label class="field-label">Height (mm)</label>
+              <label class="field-label">Max height (mm)</label>
               <input type="number" name="height_mm" step="0.1" value="200">
             </div>
           </div>
+          <label class="toggle"><input type="checkbox" name="fit_aspect" value="true" checked><span>Fit image aspect inside the bounding box</span></label>
           <div class="field-row">
             <div class="field">
               <label class="field-label">Kerf (mm)</label>

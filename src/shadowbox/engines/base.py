@@ -22,13 +22,16 @@ class SlicingEngine(Protocol):
         *,
         threshold_mode: str = "otsu",
         invert_layers: tuple[int, ...] = (),
+        smoothing: int = 2,
     ) -> list[np.ndarray]:
-        """Return N binary masks, back→front.
+        """Return N binary masks, back-to-front.
 
         - `image` is HxW grayscale (uint8) or HxWxC (will be converted).
         - `threshold_mode` is engine-specific. Engines that don't support a
           mode should raise ValueError on anything but their default.
-        - `invert_layers` is a tuple of 1-based layer indices whose mask should
-          be flipped before return.
+        - `invert_layers` is a tuple of 1-based layer indices whose mask
+          should be flipped before return.
+        - `smoothing` ∈ {0..3} hints at how aggressively the engine should
+          clean up tiny artifacts (specks, holes). Engines may ignore it.
         """
         ...
