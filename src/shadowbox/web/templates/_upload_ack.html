@@ -1,3 +1,5 @@
-<div class="upload-ack" data-token="{{ token }}">
-  <p><strong>Uploaded:</strong> {{ filename }} ({{ size_kb }} KB) &mdash; token <code>{{ token[:8] }}&hellip;</code></p>
+<div class="has-upload" data-token="{{ token }}">
+  <span class="tick">&#10003;</span>
+  {{ filename or 'image' }} <span style="color:var(--ink-3)">({{ size_kb }} KB)</span>
+  &middot; <code>{{ token[:8] }}&hellip;</code>
 </div>

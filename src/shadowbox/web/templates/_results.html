@@ -1,47 +1,58 @@
-<h2>3. Preview</h2>
-
 {% if result.warnings %}
-<div class="preflight">
-  <h3>Pre-flight notes</h3>
-  <ul>
-    {% for w in result.warnings %}
-      <li class="severity-{{ w.severity }}"><strong>[{{ w.severity }}]</strong>
-        layer {{ w.layer or '*' }} &mdash; <em>{{ w.code }}</em>: {{ w.message }}</li>
-    {% endfor %}
-  </ul>
-</div>
+<section class="preflight">
+  {% for w in result.warnings %}
+    <div class="preflight-item {{ w.severity }}">
+      <span class="severity">{{ w.severity }}</span>
+      <span class="target">layer {{ w.layer or '*' }} / {{ w.code }}</span>
+      {{ w.message }}
+    </div>
+  {% endfor %}
+</section>
 {% endif %}
 
-<div class="stack-preview" aria-label="Stacked composite preview">
-  <div class="stack-frame">
+<section class="viewer">
+  <div class="stack">
     {% for layer in result.layers %}
-      {% set depth = (loop.index0) %}
+      {% set depth = loop.index0 %}
+      {% set total = result.layers|length %}
+      {% set offset = (total - 1 - depth) * 8 %}
       <div class="stack-layer"
            style="
-             transform: translate3d({{ depth * 6 }}px, {{ depth * -6 }}px, 0);
+             transform: translate3d({{ -offset }}px, {{ -offset }}px, {{ depth * 10 }}px);
              background: {{ colors[depth] if depth < colors|length else '#cccccc' }};
-             box-shadow: 0 {{ 1 + depth }}px {{ 3 + depth * 2 }}px rgba(0,0,0,0.25);
+             box-shadow: 0 {{ 2 + depth * 2 }}px {{ 6 + depth * 4 }}px rgba(0,0,0,0.35);
              z-index: {{ depth }};
            ">
-        <div class="stack-mask">{{ layer.svg | safe }}</div>
+        <div class="stack-svg">{{ layer.svg | safe }}</div>
       </div>
     {% endfor %}
   </div>
+</section>
+
+<div class="layers-head">
+  <h2>Layers (back &rarr; front)</h2>
+  <span class="meta">
+    {{ result.canvas_mm[0] | round(1) }}&times;{{ result.canvas_mm[1] | round(1) }}mm
+    &middot; kerf {{ '%.2f' % settings.kerf_mm }}mm
+    &middot; min feature {{ '%.2f' % settings.min_feature_mm }}mm
+  </span>
 </div>
 
-<div class="layer-grid">
+<div class="layers">
   {% for layer in result.layers %}
+    {% set role = 'back' if loop.first else ('front' if loop.last else 'middle') %}
     <figure class="layer-card">
-      <figcaption>Layer {{ layer.index }} / {{ layer.total }}</figcaption>
+      <div class="layer-card-head">
+        <span class="pos">{{ layer.index }} / {{ layer.total }}</span>
+        <span class="role">{{ role }}</span>
+      </div>
       <div class="layer-svg">{{ layer.svg | safe }}</div>
     </figure>
   {% endfor %}
 </div>
 
-<p class="muted">Canvas {{ result.canvas_px[0] }}&times;{{ result.canvas_px[1] }}px &rarr;
-  {{ '%.1f' % result.canvas_mm[0] }}&times;{{ '%.1f' % result.canvas_mm[1] }}mm.
-  Kerf {{ '%.2f' % settings.kerf_mm }}mm, min feature {{ '%.2f' % settings.min_feature_mm }}mm.</p>
-
-{% for note in result.notes %}
-  <p class="muted"><em>{{ note }}</em></p>
-{% endfor %}
+{% if result.notes %}
+<div class="notes">
+  {% for note in result.notes %}<div class="note">{{ note }}</div>{% endfor %}
+</div>
+{% endif %}

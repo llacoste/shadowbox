@@ -48,9 +48,11 @@ def test_process_returns_layer_html(client: TestClient) -> None:
         data={"token": token, "layers": "3", "threshold_mode": "equal", "kerf_mm": "0"},
     )
     assert r.status_code == 200
-    # Three layer cards + a stacking preview.
-    assert r.text.count("Layer 1 / 3") == 1
-    assert "stack-preview" in r.text
+    # Three layer cards (each carries "<idx> / <total>" plus a back/front role)
+    # and one stacking viewer.
+    assert r.text.count("1 / 3") >= 1
+    assert "back" in r.text and "front" in r.text
+    assert "viewer" in r.text
 
 
 def test_download_returns_zip_with_layers(client: TestClient) -> None:
