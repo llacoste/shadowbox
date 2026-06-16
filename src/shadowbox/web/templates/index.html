@@ -205,10 +205,14 @@
     const colorsInput = document.getElementById("layer-colors-input");
     const layersInput = document.getElementById("layers-input");
     function defaultColor(i, n) {
+      // Wood-tone ramp from light birch (back) to dark walnut (front).
+      // Interpolated in sRGB between two endpoints; readable as a real shadow
+      // box even before the user picks custom colors.
       const t = n <= 1 ? 0 : i / (n - 1);
-      const shade = Math.round(230 - t * 180);
-      const hex = shade.toString(16).padStart(2, "0");
-      return `#${hex}${hex}${hex}`;
+      const back  = [232, 213, 178]; // birch
+      const front = [ 80,  52,  32]; // walnut
+      const c = back.map((b, k) => Math.round(b + (front[k] - b) * t));
+      return "#" + c.map(v => v.toString(16).padStart(2, "0")).join("");
     }
     function buildPalette() {
       const n = parseInt(layersInput.value, 10) || 5;
@@ -259,7 +263,7 @@
     document.getElementById("save-btn").addEventListener("click", () => postBinary("/project/save"));
 
     // ─── localStorage settings persistence (not image) ───────────────
-    const STORAGE_KEY = "shadowbox.settings.v1";
+    const STORAGE_KEY = "shadowbox.settings.v2";  // bumped: new default palette
     function restoreSettings() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);

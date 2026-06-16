@@ -248,7 +248,7 @@ body {
     radial-gradient(ellipse 60% 50% at 50% 70%, rgba(255,255,255,0.06), transparent 70%),
     linear-gradient(180deg, var(--viewer-bg) 0%, var(--viewer-bg-2) 100%);
   border-radius: 12px;
-  padding: 3rem 2rem 4rem;
+  padding: 2.5rem 2rem 3.5rem;
   margin-bottom: 1.75rem;
   perspective: 1200px;
   min-height: 460px;
@@ -262,13 +262,102 @@ body {
   background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0,0,0,0.4), transparent 60%);
   pointer-events: none;
 }
+
+.viewer-toolbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+.view-segment {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 3px;
+  gap: 2px;
+}
+.view-segment button {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.3125rem 0.875rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.view-segment button:hover { color: white; }
+.view-segment button.is-active {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+}
+
+/* Common SVG fills inside both viewer modes — fill material with the layer's
+   color, treat cut paths as boundaries with fill-rule:evenodd so internal
+   holes appear as actual holes (revealing the layer behind). */
+.viewer-composite .stack-svg svg [id="cuts"],
+.viewer-stack .stack-svg svg [id="cuts"] {
+  fill: var(--layer-color) !important;
+  fill-rule: evenodd !important;
+  stroke: none !important;
+}
+.viewer-composite .stack-svg svg [id="frame"],
+.viewer-stack .stack-svg svg [id="frame"],
+.viewer-composite .stack-svg svg [id="layer-number"],
+.viewer-stack .stack-svg svg [id="layer-number"] {
+  display: none;
+}
+.stack-svg svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ─── Composite (front-on, "finished piece") view ─── */
+.viewer-composite {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  min-height: 360px;
+}
+.composite-frame {
+  position: relative;
+  width: min(440px, 80%);
+  aspect-ratio: 1 / 1;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.5),
+    0 6px 12px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+.composite-layer {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+/* Front layers get a faint inner shadow on the cut edges to suggest the
+   layer beneath sits BELOW this material plane. */
+.composite-layer .stack-svg svg [id="cuts"] {
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.18));
+}
+
+/* ─── Stacked 3D view (perspective slab) ─── */
 .viewer-stack {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
   min-height: 380px;
 }
-
 .stack {
   position: relative;
   width: 340px;
@@ -278,6 +367,15 @@ body {
   transition: transform 0.4s ease;
 }
 .viewer-stack:hover .stack { transform: rotateX(15deg) rotateY(-10deg); }
+.stack-layer {
+  /* Transparent backgrounds — holes through THIS layer reveal layers behind. */
+  background: transparent;
+}
+/* In 3D mode each layer gets a hairline edge to suggest thickness. */
+.viewer-stack .stack-svg svg [id="cuts"] {
+  stroke: rgba(0, 0, 0, 0.5) !important;
+  stroke-width: 0.6 !important;
+}
 
 /* ─────────────────────── Focus mode ─────────────────────── */
 .viewer-focus {
@@ -376,22 +474,6 @@ body {
   width: 100%;
   height: 100%;
 }
-.stack-layer .stack-svg svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-/* Override the laser-thin strokes for preview legibility — the downloaded
-   SVGs keep the original 0.01mm widths. */
-.stack-layer .stack-svg svg [id="cuts"] {
-  stroke-width: 1.5 !important;
-  stroke: rgba(0, 0, 0, 0.75) !important;
-}
-.stack-layer .stack-svg svg [id="frame"] {
-  stroke-width: 1 !important;
-  stroke: rgba(0, 0, 0, 0.85) !important;
-}
-.stack-layer .stack-svg svg [id="layer-number"] { display: none; }
 
 /* ─────────────────────── Layer grid ─────────────────────── */
 .layers-head {

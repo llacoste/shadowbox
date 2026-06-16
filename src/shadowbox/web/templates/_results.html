@@ -12,27 +12,46 @@
 
 {% set total = result.layers|length %}
 
-<section class="viewer" data-mode="stack" id="viewer">
-  <!-- Stack mode: 3D-stacked composite -->
-  <div class="viewer-stack">
-    <div class="stack">
+<section class="viewer" data-mode="composite" id="viewer">
+  <div class="viewer-toolbar">
+    <div class="view-segment" role="tablist" aria-label="View mode">
+      <button type="button" data-view="composite" class="is-active" role="tab">Composite</button>
+      <button type="button" data-view="stacked"   role="tab">Stacked 3D</button>
+    </div>
+  </div>
+
+  <!-- Composite mode: front-on, layers fill material; holes reveal layers behind. -->
+  <div class="viewer-composite">
+    <div class="composite-frame">
       {% for layer in result.layers %}
         {% set depth = loop.index0 %}
-        {% set offset = (total - 1 - depth) * 8 %}
-        <div class="stack-layer"
-             style="
-               transform: translate3d({{ -offset }}px, {{ -offset }}px, {{ depth * 10 }}px);
-               background: {{ colors[depth] if depth < colors|length else '#cccccc' }};
-               box-shadow: 0 {{ 2 + depth * 2 }}px {{ 6 + depth * 4 }}px rgba(0,0,0,0.35);
-               z-index: {{ depth }};
-             ">
+        <div class="composite-layer"
+             style="--layer-color: {{ colors[depth] if depth < colors|length else '#cccccc' }};
+                    z-index: {{ depth }};">
           <div class="stack-svg">{{ layer.svg | safe }}</div>
         </div>
       {% endfor %}
     </div>
   </div>
 
-  <!-- Focus mode: single-layer flat view (populated on click) -->
+  <!-- Stacked 3D mode: perspective view showing layer thickness. -->
+  <div class="viewer-stack" hidden>
+    <div class="stack">
+      {% for layer in result.layers %}
+        {% set depth = loop.index0 %}
+        {% set offset = (total - 1 - depth) * 8 %}
+        <div class="stack-layer"
+             style="--layer-color: {{ colors[depth] if depth < colors|length else '#cccccc' }};
+                    transform: translate3d({{ -offset }}px, {{ -offset }}px, {{ depth * 12 }}px);
+                    box-shadow: 0 {{ 2 + depth * 2 }}px {{ 6 + depth * 4 }}px rgba(0,0,0,0.4);
+                    z-index: {{ depth }};">
+          <div class="stack-svg">{{ layer.svg | safe }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Focus mode: single-layer flat view (populated on click). -->
   <div class="viewer-focus" hidden>
     <button type="button" class="viewer-back" data-action="back" aria-label="Back to stack">
       &larr; All layers
@@ -88,22 +107,27 @@
   (() => {
     const viewer = document.getElementById("viewer");
     if (!viewer) return;
+    const compositeView = viewer.querySelector(".viewer-composite");
     const stackView = viewer.querySelector(".viewer-stack");
     const focusView = viewer.querySelector(".viewer-focus");
     const focusSvg  = document.getElementById("focus-svg");
     const focusPos  = document.getElementById("focus-pos");
     const focusRole = document.getElementById("focus-role");
     const cards     = Array.from(document.querySelectorAll("#layers-grid .layer-card"));
+    const viewBtns  = Array.from(viewer.querySelectorAll(".view-segment button"));
     if (!cards.length) return;
 
     let current = 0;
 
-    function showStack() {
-      viewer.dataset.mode = "stack";
-      stackView.hidden = false;
-      focusView.hidden = true;
-      cards.forEach(c => c.classList.remove("is-active"));
+    function setView(name) {
+      viewer.dataset.mode = name;
+      compositeView.hidden = name !== "composite";
+      stackView.hidden     = name !== "stacked";
+      focusView.hidden     = name !== "focus";
+      viewBtns.forEach(b => b.classList.toggle("is-active", b.dataset.view === name));
+      if (name !== "focus") cards.forEach(c => c.classList.remove("is-active"));
     }
+
     function showFocus(idx) {
       current = Math.max(0, Math.min(cards.length - 1, idx));
       const card = cards[current];
@@ -111,17 +135,18 @@
       if (!svg) return;
       focusSvg.innerHTML = "";
       const clone = svg.cloneNode(true);
-      // Strip the inline mm dimensions so CSS sizing wins.
       clone.removeAttribute("width");
       clone.removeAttribute("height");
       focusSvg.appendChild(clone);
       focusPos.textContent  = card.dataset.layerPos;
       focusRole.textContent = card.dataset.layerRole;
-      viewer.dataset.mode = "focus";
-      stackView.hidden = true;
-      focusView.hidden = false;
+      setView("focus");
       cards.forEach((c, i) => c.classList.toggle("is-active", i === current));
     }
+
+    viewBtns.forEach(btn => {
+      btn.addEventListener("click", () => setView(btn.dataset.view));
+    });
 
     cards.forEach((card, idx) => {
       card.addEventListener("click", () => showFocus(idx));
@@ -129,14 +154,14 @@
 
     focusView.addEventListener("click", (e) => {
       const action = e.target.closest("[data-action]")?.dataset.action;
-      if (action === "back")  showStack();
+      if (action === "back")  setView("composite");
       if (action === "prev")  showFocus(current - 1);
       if (action === "next")  showFocus(current + 1);
     });
 
     document.addEventListener("keydown", (e) => {
       if (viewer.dataset.mode !== "focus") return;
-      if (e.key === "Escape")     { showStack(); e.preventDefault(); }
+      if (e.key === "Escape")     { setView("composite"); e.preventDefault(); }
       if (e.key === "ArrowLeft")  { showFocus(current - 1); e.preventDefault(); }
       if (e.key === "ArrowRight") { showFocus(current + 1); e.preventDefault(); }
     });
