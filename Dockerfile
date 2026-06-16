@@ -16,6 +16,7 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
+       curl \
        libgl1 \
        libglib2.0-0 \
        libgomp1 \
@@ -29,6 +30,15 @@ WORKDIR /app
 RUN pip install --upgrade pip \
     && pip install "rembg[cpu]>=2.0.50" \
     && python -c "from rembg import new_session; new_session()"
+
+# Cache the Depth Anything v2 (Small, fp16) ONNX model — same layering
+# discipline: independent of project source so it survives config tweaks.
+# fp16 trades a few percent of quality for ~50% the disk footprint vs the
+# full-precision export. Updates: replace the URL with a different revision
+# or model size; the file is loaded by path from /models in depth.py.
+RUN mkdir -p /models \
+    && curl -fsSL --retry 3 -o /models/depth_anything_v2_small_fp16.onnx \
+       "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model_fp16.onnx"
 
 # Install dependencies next so source edits don't bust the deps layer cache.
 COPY pyproject.toml README.md ./

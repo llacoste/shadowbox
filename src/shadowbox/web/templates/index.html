@@ -46,6 +46,13 @@
         <div class="section">
           <h3 class="section-title">2. Layers</h3>
           <div class="field">
+            <label class="field-label">Engine <span style="color:var(--ink-3)">(photos: depth)</span></label>
+            <div class="segment">
+              <label><input type="radio" name="engine" value="luminance" checked><span>Luminance</span></label>
+              <label><input type="radio" name="engine" value="depth"><span>Depth</span></label>
+            </div>
+          </div>
+          <div class="field">
             <label class="field-label">Count</label>
             <input type="number" name="layers" min="1" max="20" value="5" id="layers-input">
           </div>
