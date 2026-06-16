@@ -10,12 +10,13 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from shadowbox.engines.base import SlicingEngine
-from shadowbox.engines.depth import DepthAnythingEngine
+from shadowbox.engines.depth import DepthAnythingBaseEngine, DepthAnythingEngine
 from shadowbox.engines.luminance import LuminanceEngine
 
 _FACTORIES: dict[str, Callable[[], SlicingEngine]] = {
     LuminanceEngine.name: LuminanceEngine,
     DepthAnythingEngine.name: DepthAnythingEngine,
+    DepthAnythingBaseEngine.name: DepthAnythingBaseEngine,
 }
 _INSTANCES: dict[str, SlicingEngine] = {}
 
@@ -33,4 +34,4 @@ def names() -> list[str]:
     return sorted(_FACTORIES)
 
 
-__all__ = ["DepthAnythingEngine", "LuminanceEngine", "SlicingEngine", "get", "names"]
+__all__ = ["DepthAnythingBaseEngine", "DepthAnythingEngine", "LuminanceEngine", "SlicingEngine", "get", "names"]

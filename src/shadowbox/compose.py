@@ -36,6 +36,7 @@ def compose_layer(
     total_layers: int,
     frame: bool = True,
     engrave_number: bool = True,
+    margin_mm: float = 0.0,
 ) -> str:
     """Return an SVG string for one layer.
 
@@ -43,6 +44,8 @@ def compose_layer(
     `canvas_px` is the (width, height) in pixels (matches the source image).
     `canvas_mm` is the physical (width, height) in millimeters.
     `layer_index` is 1-based; the engraved label reads f"{layer_index}/{total_layers}".
+    `margin_mm` insets the cuts (and frame) inward from the canvas edge by
+    this many millimeters — gives the subject breathing room.
     """
     width_px, height_px = canvas_px
     width_mm, height_mm = canvas_mm
@@ -53,18 +56,26 @@ def compose_layer(
         size=(f"{width_mm:.4f}mm", f"{height_mm:.4f}mm"),
         viewBox=f"0 0 {width_px} {height_px}",
     )
-    # Stroke widths are quoted in mm via the viewBox→mm mapping. Convert mm
-    # back to viewBox units so the rendered stroke is CUT_STROKE_MM wide
-    # regardless of canvas scale.
     px_per_mm_x = width_px / width_mm
+    px_per_mm_y = height_px / height_mm
     cut_stroke_units = CUT_STROKE_MM * px_per_mm_x
 
-    cuts = dwg.g(
-        id="cuts",
-        stroke=CUT_COLOR,
-        fill="none",
-        stroke_width=f"{cut_stroke_units:.4f}",
-    )
+    margin_px_x = max(0.0, margin_mm) * px_per_mm_x
+    margin_px_y = max(0.0, margin_mm) * px_per_mm_y
+    inset_w = max(1.0, width_px - 2 * margin_px_x)
+    inset_h = max(1.0, height_px - 2 * margin_px_y)
+    scale_x = inset_w / width_px
+    scale_y = inset_h / height_px
+
+    cuts_attrs: dict[str, object] = {
+        "id": "cuts",
+        "stroke": CUT_COLOR,
+        "fill": "none",
+        "stroke_width": f"{cut_stroke_units:.4f}",
+    }
+    if margin_px_x > 0 or margin_px_y > 0:
+        cuts_attrs["transform"] = f"translate({margin_px_x} {margin_px_y}) scale({scale_x} {scale_y})"
+    cuts = dwg.g(**cuts_attrs)
     for d in paths:
         cuts.add(dwg.path(d=d))
     dwg.add(cuts)
@@ -76,15 +87,15 @@ def compose_layer(
             fill="none",
             stroke_width=f"{cut_stroke_units:.4f}",
         )
-        frame_group.add(dwg.rect(insert=(0, 0), size=(width_px, height_px)))
+        frame_group.add(dwg.rect(insert=(margin_px_x, margin_px_y), size=(inset_w, inset_h)))
         dwg.add(frame_group)
 
     if engrave_number:
         # ~5mm character height, inside the frame's bottom-right corner.
         label_height_mm = 5.0
-        margin_mm = 2.0
+        label_margin_mm = 2.0 + max(0.0, margin_mm)
         font_size_units = label_height_mm * px_per_mm_x
-        margin_units = margin_mm * px_per_mm_x
+        margin_units = label_margin_mm * px_per_mm_x
         label = dwg.g(id="layer-number", fill=ENGRAVE_COLOR, stroke="none")
         label.add(
             dwg.text(

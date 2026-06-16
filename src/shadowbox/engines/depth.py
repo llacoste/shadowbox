@@ -1,4 +1,4 @@
-"""Monocular-depth slicer powered by Depth Anything v2 (Small, ONNX).
+"""Monocular-depth slicer powered by Depth Anything v2 (ONNX).
 
 For photographic input, luminance binning gives nonsense: bright snow ends
 up "front", dark sky ends up "back", and texture survives every smoothing
@@ -6,9 +6,15 @@ level. This engine asks a vision model where each pixel sits in z, then
 quantizes the depth map into N back-to-front layers — which is what a
 shadow box actually wants.
 
-Model: Depth Anything v2 Small, fp16-quantized ONNX (~50MB). Baked into the
-Docker image at build time so first-run latency is just ONNX session init,
-not a model download.
+Two model sizes are baked into the Docker image:
+- Small (~50MB) — engine name "depth". Fast, good default.
+- Base  (~195MB) — engine name "depth-hq". Sharper edges on outdoor scenes.
+
+Quantization strategy is "foreground-biased" by default: layer 1 (back) holds
+the entire silhouette (everything passing a permissive cutoff), and the
+remaining N-1 layers concentrate on the subject's depth range — giving real
+variation between layers instead of N near-copies. Set threshold_mode=equal
+or kmeans to use linear quantization across the full depth range.
 """
 
 from __future__ import annotations
@@ -18,10 +24,13 @@ from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
-from PIL import Image
-from skimage.filters import threshold_multiotsu
+from PIL import Image, ImageFilter
+from skimage.filters import threshold_multiotsu, threshold_otsu
 
-DEFAULT_MODEL_PATH = "/models/depth_anything_v2_small_fp16.onnx"
+_MODEL_PATHS: dict[str, str] = {
+    "small": "/models/depth_anything_v2_small_fp16.onnx",
+    "base": "/models/depth_anything_v2_base_fp16.onnx",
+}
 ENV_MODEL_PATH = "SHADOWBOX_DEPTH_MODEL"
 
 # DPTImageProcessor defaults from the model's preprocessor_config.json.
@@ -30,22 +39,29 @@ _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 _TARGET_SIZE = 518
 _MULTIPLE_OF = 14
 
+# Gaussian sigma applied to the depth map before quantization. Levels match
+# the engine-side `smoothing` parameter so users have one knob.
+_DEPTH_BLUR_BY_LEVEL: dict[int, float] = {0: 0.0, 1: 0.8, 2: 1.6, 3: 3.0}
+
 
 class DepthAnythingEngine:
+    """Default depth engine — uses the Small model."""
+
     name: ClassVar[str] = "depth"
+    model_size: ClassVar[str] = "small"
 
     def __init__(self, model_path: str | None = None):
         # Lazy-import onnxruntime so `import shadowbox.engines` is cheap and
-        # works in environments without the model. We only pay the import cost
-        # when someone actually instantiates the engine.
+        # works in environments without the model.
         import onnxruntime as ort
 
-        path = Path(model_path or os.environ.get(ENV_MODEL_PATH, DEFAULT_MODEL_PATH))
+        env_override = os.environ.get(ENV_MODEL_PATH)
+        path = Path(model_path or env_override or _MODEL_PATHS[self.model_size])
         if not path.exists():
             raise FileNotFoundError(
-                f"Depth model not found at {path}. The Docker image bakes it at "
-                f"{DEFAULT_MODEL_PATH}; for local runs set {ENV_MODEL_PATH} to the "
-                f"ONNX file path."
+                f"Depth model not found at {path}. The Docker image bakes one at "
+                f"{_MODEL_PATHS[self.model_size]}; for local runs set {ENV_MODEL_PATH} "
+                f"to a Depth Anything v2 ONNX file."
             )
         opts = ort.SessionOptions()
         opts.log_severity_level = 3  # mute INFO/WARNING noise on session init
@@ -60,18 +76,13 @@ class DepthAnythingEngine:
         *,
         threshold_mode: str = "otsu",
         invert_layers: tuple[int, ...] = (),
-        smoothing: int = 2,  # accepted for protocol parity; the depth engine doesn't use it
+        smoothing: int = 2,
     ) -> list[np.ndarray]:
-        del smoothing  # mark intentionally unused
         if n_layers < 1:
             raise ValueError(f"n_layers must be >= 1, got {n_layers}")
 
-        depth = self._estimate_depth(image)  # uint8 [0,255]; 0=far, 255=near
-        # Back layer holds everything *at-or-beyond* a far threshold; front
-        # layer holds only the nearest pixels. depth higher = closer, so for
-        # `back→front` ordering we want thresholds DESCENDING: layer 0 keeps
-        # pixels with depth >= a loose (low) value (most of the image),
-        # layer N-1 keeps only the closest stuff.
+        depth = self._estimate_depth(image)  # uint8; 0=far, 255=near
+        depth = _smooth_depth(depth, smoothing)
         thresholds = _thresholds(depth, n_layers, threshold_mode)
         thresholds = sorted(thresholds)  # ascending; layer 0 uses the smallest
         masks = [depth >= t for t in thresholds]
@@ -94,23 +105,27 @@ class DepthAnythingEngine:
         pil = Image.fromarray(rgb.astype(np.uint8)).resize((resize_w, resize_h), Image.Resampling.BICUBIC)
         arr = np.asarray(pil, dtype=np.float32) / 255.0
         arr = (arr - _IMAGENET_MEAN) / _IMAGENET_STD
-        # HWC → NCHW
         tensor = np.transpose(arr, (2, 0, 1))[None, ...].astype(self._input_dtype)
 
         depth_raw = self._session.run(None, {self._input_name: tensor})[0]
-        # Model returns shape (1, H, W) or (1, 1, H, W).
         depth_map = np.asarray(depth_raw).squeeze().astype(np.float32)
 
         # Resize back to the source resolution so masks align with the input.
         depth_pil = Image.fromarray(depth_map).resize((orig_w, orig_h), Image.Resampling.BILINEAR)
         depth_resized = np.asarray(depth_pil, dtype=np.float32)
 
-        # Normalize to [0, 255]. Higher raw values = closer for this model.
         lo, hi = float(depth_resized.min()), float(depth_resized.max())
         if hi - lo < 1e-6:
             return np.full(depth_resized.shape, 128, dtype=np.uint8)
         normalized = (depth_resized - lo) / (hi - lo) * 255.0
         return normalized.astype(np.uint8)
+
+
+class DepthAnythingBaseEngine(DepthAnythingEngine):
+    """Higher-quality depth — uses the Base model (~195MB)."""
+
+    name: ClassVar[str] = "depth-hq"
+    model_size: ClassVar[str] = "base"
 
 
 def _model_input_size(w: int, h: int, target: int = _TARGET_SIZE, multiple: int = _MULTIPLE_OF) -> tuple[int, int]:
@@ -125,8 +140,27 @@ def _round_to_multiple(value: int, multiple: int) -> int:
     return max(multiple, round(value / multiple) * multiple)
 
 
+def _smooth_depth(depth: np.ndarray, level: int) -> np.ndarray:
+    sigma = _DEPTH_BLUR_BY_LEVEL.get(level, _DEPTH_BLUR_BY_LEVEL[2])
+    if sigma <= 0:
+        return depth
+    blurred = Image.fromarray(depth).filter(ImageFilter.GaussianBlur(radius=sigma))
+    return np.asarray(blurred, dtype=np.uint8)
+
+
 def _thresholds(depth: np.ndarray, n_layers: int, mode: str) -> list[int]:
-    """Pick N-1 interior break points plus a low edge, then return N values."""
+    """Compute N back→front cutoff values for `depth >= t` masking.
+
+    Default "otsu" mode is foreground-biased: layer 0 covers the entire image
+    (back panel), layer 1 captures everything denser than Otsu's foreground
+    break (the subject silhouette), and layers 2..N-1 spread evenly through
+    the foreground depth range. This gives real variation between layers
+    instead of N near-copies of the same outline.
+
+    "equal" and "kmeans" treat the depth range as a single domain — equal
+    bands or k-means breaks across [min, max] — which is fine for synthetic
+    inputs but produces clustered, similar-looking layers on natural photos.
+    """
     if n_layers == 1:
         return [int(np.median(depth))]
     if mode == "equal":
@@ -136,13 +170,7 @@ def _thresholds(depth: np.ndarray, n_layers: int, mode: str) -> list[int]:
         step = (hi - lo) / n_layers
         return [round(lo + step * i) for i in range(n_layers)]
     if mode == "otsu":
-        try:
-            breaks = threshold_multiotsu(depth, classes=n_layers).astype(int).tolist()
-        except ValueError:
-            return _thresholds(depth, n_layers, "equal")
-        # threshold_multiotsu returns N-1 interior breaks; prepend min for the
-        # back-layer threshold (loosest cutoff).
-        return [int(depth.min()), *breaks]
+        return _foreground_biased_thresholds(depth, n_layers)
     if mode == "kmeans":
         from scipy.cluster.vq import kmeans2
 
@@ -153,3 +181,41 @@ def _thresholds(depth: np.ndarray, n_layers: int, mode: str) -> list[int]:
         midpoints = [round((centers[i] + centers[i + 1]) / 2) for i in range(len(centers) - 1)]
         return [int(depth.min()), *midpoints]
     raise ValueError(f"Unknown threshold_mode {mode!r}. Expected: equal|otsu|kmeans")
+
+
+def _foreground_biased_thresholds(depth: np.ndarray, n_layers: int) -> list[int]:
+    """Layer 0 = entire silhouette; layers 1..N-1 spread across the foreground."""
+    lo = int(depth.min())
+    hi = int(depth.max())
+    if hi - lo < n_layers:
+        # Depth range too narrow for distinct bands; fall back to equal.
+        step = max(1, (hi - lo) / n_layers)
+        return [round(lo + step * i) for i in range(n_layers)]
+
+    try:
+        fg_break = int(threshold_otsu(depth))
+    except ValueError:
+        fg_break = int((lo + hi) / 2)
+    fg_break = max(lo + 1, min(hi - 1, fg_break))
+
+    # When N is very small, behave gracefully.
+    if n_layers == 2:
+        return [lo, fg_break]
+
+    # Reserve layer 0 for the back panel; distribute layers 1..N-1 across
+    # [fg_break, hi]. Use Otsu again on the foreground subset for natural
+    # interior breaks; fall back to equal spacing if Otsu can't.
+    fg_pixels = depth[depth >= fg_break]
+    interior_count = n_layers - 2  # interior breaks between fg_break and hi
+    interior_breaks: list[int]
+    if interior_count <= 0:
+        interior_breaks = []
+    else:
+        try:
+            ms = threshold_multiotsu(fg_pixels, classes=interior_count + 1)
+            interior_breaks = [int(b) for b in ms]
+        except ValueError:
+            step = (hi - fg_break) / (interior_count + 1)
+            interior_breaks = [round(fg_break + step * (i + 1)) for i in range(interior_count)]
+
+    return [lo, fg_break, *interior_breaks]

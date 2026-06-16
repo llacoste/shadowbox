@@ -28,6 +28,7 @@ class ProjectSettings:
     height_mm: float = 200.0
     kerf_mm: float = 0.15
     min_feature_mm: float = 0.5
+    margin_mm: float = 0.0
     invert_layers: tuple[int, ...] = ()
     frame: bool = True
     engrave_numbers: bool = True
@@ -71,6 +72,7 @@ def from_json(raw: str) -> tuple[ProjectSettings, str]:
         height_mm=s["height_mm"],
         kerf_mm=s["kerf_mm"],
         min_feature_mm=s["min_feature_mm"],
+        margin_mm=s.get("margin_mm", 0.0),
         invert_layers=tuple(s.get("invert_layers", [])),
         frame=s["frame"],
         engrave_numbers=s["engrave_numbers"],

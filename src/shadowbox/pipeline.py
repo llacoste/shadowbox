@@ -118,6 +118,7 @@ def process(
             total_layers=settings.layers,
             frame=settings.frame,
             engrave_number=settings.engrave_numbers,
+            margin_mm=settings.margin_mm,
         )
         layers.append(SvgLayer(index=i, total=settings.layers, svg=svg, paths=paths))
 

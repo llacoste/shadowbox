@@ -24,6 +24,9 @@
         hx-target="#upload-state"
         hx-swap="innerHTML"
         hx-encoding="multipart/form-data"
+        hx-indicator="#progress-overlay"
+        hx-on:htmx:before-request="document.getElementById('progress-text').textContent='Uploading...';"
+        hx-on:htmx:after-request="document.getElementById('progress-text').textContent='Generating layers...';"
       >
         <h3 class="section-title">1. Source image</h3>
         <div class="field">
@@ -39,7 +42,7 @@
         hx-post="/process"
         hx-target="#results"
         hx-swap="innerHTML"
-        hx-indicator="#generate-spinner"
+        hx-indicator="#progress-overlay, #generate-spinner"
       >
         <input type="hidden" name="token" id="token" value="">
 
@@ -50,6 +53,7 @@
             <div class="segment">
               <label><input type="radio" name="engine" value="luminance" checked><span>Luminance</span></label>
               <label><input type="radio" name="engine" value="depth"><span>Depth</span></label>
+              <label><input type="radio" name="engine" value="depth-hq"><span>Depth HQ</span></label>
             </div>
           </div>
           <div class="field">
@@ -112,6 +116,10 @@
               <input type="number" name="min_feature_mm" step="0.05" min="0" value="0.5">
             </div>
           </div>
+          <div class="field">
+            <label class="field-label">Margin (mm) <span style="color:var(--ink-3)">(space between cuts and frame)</span></label>
+            <input type="number" name="margin_mm" step="0.5" min="0" value="0">
+          </div>
         </div>
 
         <div class="section">
@@ -149,14 +157,25 @@
       <h1>Workbench</h1>
       <p class="subtitle">Tune the slice, then download a stack of laser-ready SVGs.</p>
 
-      <div id="results">
-        <div class="empty-hero">
-          <h2>Drop an image to start</h2>
-          <p>
-            Upload a silhouette, illustration, or photo on the left. Hit
-            <kbd>Generate preview</kbd> to see the stack. Photos with busy
-            backgrounds work better with <kbd>Remove background</kbd> on.
-          </p>
+      <div id="results-shell" class="results-shell">
+        <div id="results">
+          <div class="empty-hero">
+            <h2>Drop an image to start</h2>
+            <p>
+              Upload a silhouette, illustration, or photo on the left. Hit
+              <kbd>Generate preview</kbd> to see the stack. Photos with busy
+              backgrounds work better with <kbd>Remove background</kbd> on,
+              and <kbd>Depth</kbd> for the engine.
+            </p>
+          </div>
+        </div>
+        <!-- Loading overlay — appears while HTMX is processing /process or /upload. -->
+        <div class="progress-overlay" id="progress-overlay" aria-hidden="true">
+          <div class="progress-card">
+            <div class="progress-bar"><div class="progress-bar-fill"></div></div>
+            <div class="progress-text" id="progress-text">Generating layers&hellip;</div>
+            <div class="progress-hint">Depth HQ can take 5–15s on CPU. First request also warms the model.</div>
+          </div>
         </div>
       </div>
     </main>

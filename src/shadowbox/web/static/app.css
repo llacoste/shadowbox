@@ -517,6 +517,8 @@ body {
 
 /* ─────────────────────── HTMX loading state ─────────────────────── */
 .is-loading { opacity: 0.5; pointer-events: none; }
+
+/* Small inline spinner inside the submit button. */
 .htmx-indicator {
   display: none;
   width: 14px;
@@ -527,8 +529,65 @@ body {
   animation: spin 0.8s linear infinite;
   margin-left: 0.5rem;
 }
-.htmx-request .htmx-indicator { display: inline-block; }
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator { display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Full-area progress overlay over the preview region. */
+.results-shell { position: relative; }
+.progress-overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 244, 241, 0.85);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  border-radius: 12px;
+  z-index: 10;
+  animation: fadeIn 0.15s ease-out;
+}
+.progress-overlay.htmx-request { display: flex; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.progress-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  min-width: 280px;
+  max-width: 400px;
+  text-align: center;
+}
+.progress-bar {
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.progress-bar-fill {
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, var(--ink), transparent);
+  background-size: 200% 100%;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(450%); }
+}
+.progress-text {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  margin-bottom: 0.375rem;
+}
+.progress-hint {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
 
 /* ─────────────────────── Color picker ─────────────────────── */
 .color-picker {
