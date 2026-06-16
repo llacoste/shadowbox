@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.venv/
+venv/
+env/
+
+.DS_Store
+.idea/
+.vscode/
+
+tmp/
+*.zip
+
+# Generated outputs from local just slice runs
+out/
+
+# rembg model cache when running outside Docker
+.u2net/

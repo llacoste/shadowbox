@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>shadowbox</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header>
+    <h1>shadowbox</h1>
+    <p class="tagline">Image &rarr; layered SVGs for laser-cutting a shadow box.</p>
+  </header>
+
+  <main>
+    <section id="step-upload" class="card">
+      <h2>1. Upload an image</h2>
+      <form
+        hx-post="/upload"
+        hx-target="#upload-ack"
+        hx-swap="innerHTML"
+        hx-encoding="multipart/form-data"
+      >
+        <label class="field">
+          <span>Image (PNG, JPG, WebP, &hellip;)</span>
+          <input type="file" name="image" accept="image/*" required>
+        </label>
+        <button type="submit">Upload</button>
+      </form>
+      <div id="upload-ack"></div>
+    </section>
+
+    <section id="step-configure" class="card">
+      <h2>2. Configure the cut</h2>
+      <form
+        id="settings-form"
+        hx-post="/process"
+        hx-target="#results"
+        hx-swap="innerHTML"
+      >
+        <input type="hidden" name="token" id="token" value="">
+
+        <fieldset>
+          <legend>Layers</legend>
+          <label class="field"><span>Count</span>
+            <input type="number" name="layers" min="1" max="20" value="5">
+          </label>
+          <label class="field"><span>Threshold mode</span>
+            <select name="threshold_mode">
+              <option value="otsu">otsu (auto, recommended)</option>
+              <option value="equal">equal bands</option>
+              <option value="kmeans">k-means</option>
+            </select>
+          </label>
+          <label class="field"><span>Engine</span>
+            <select name="engine"><option value="luminance">luminance</option></select>
+          </label>
+          <label class="field-row">
+            <input type="checkbox" name="remove_bg" value="true">
+            <span>Remove background (rembg / U&sup2;-Net)</span>
+          </label>
+          <label class="field"><span>Invert layers (comma-separated 1-based indices)</span>
+            <input type="text" name="invert_layers" placeholder="e.g. 2,4" value="">
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Material &amp; physical size</legend>
+          <label class="field"><span>Material preset</span>
+            <select name="material_key" id="material-select">
+              <option value="custom">custom (specify kerf below)</option>
+              {% for m in materials %}
+                <option value="{{ m.key }}" data-kerf="{{ m.kerf_mm }}">{{ m.label }} (kerf {{ '%.2f' % m.kerf_mm }}mm)</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div class="field-row">
+            <label class="field"><span>Width (mm)</span>
+              <input type="number" name="width_mm" step="0.1" value="200">
+            </label>
+            <label class="field"><span>Height (mm)</span>
+              <input type="number" name="height_mm" step="0.1" value="200">
+            </label>
+          </div>
+          <label class="field"><span>Kerf override (mm) &mdash; blank uses the preset</span>
+            <input type="number" name="kerf_mm" step="0.01" min="0" value="">
+          </label>
+          <label class="field"><span>Min feature size (mm)</span>
+            <input type="number" name="min_feature_mm" step="0.05" min="0" value="0.5">
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Output</legend>
+          <label class="field-row">
+            <input type="checkbox" name="frame" value="true" checked>
+            <span>Outer registration frame on every layer</span>
+          </label>
+          <label class="field-row">
+            <input type="checkbox" name="engrave_numbers" value="true" checked>
+            <span>Engrave the layer number in the corner</span>
+          </label>
+          <label class="field"><span>Per-layer preview colors (comma-separated CSS, e.g. <code>#e6e6e6,#999999,#444444</code>)</span>
+            <input type="text" name="layer_colors" placeholder="leave blank for a gray ramp" value="">
+          </label>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit">Generate &amp; preview</button>
+          <button
+            type="button"
+            hx-post="/download"
+            hx-include="#settings-form"
+            hx-disable
+            onclick="this.form.querySelector('[type=submit]').click()"
+          >Download ZIP</button>
+          <button
+            type="button"
+            hx-post="/project/save"
+            hx-include="#settings-form"
+          >Save project</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="results" class="card">
+      <h2>3. Preview</h2>
+      <p class="muted">Upload an image and generate to see layer previews here.</p>
+    </section>
+  </main>
+
+  <script>
+    // Wire the upload-ack fragment to the hidden token field on the settings form.
+    document.addEventListener("htmx:afterSwap", (event) => {
+      if (event.target.id === "upload-ack") {
+        const tokenNode = event.target.querySelector("[data-token]");
+        if (tokenNode) {
+          document.getElementById("token").value = tokenNode.dataset.token;
+        }
+      }
+    });
+
+    // Material preset → kerf field hint (does not override an explicit value).
+    document.getElementById("material-select").addEventListener("change", (e) => {
+      const kerfField = document.querySelector('[name="kerf_mm"]');
+      const opt = e.target.selectedOptions[0];
+      if (opt && opt.dataset.kerf && !kerfField.value) {
+        kerfField.placeholder = `using preset (${opt.dataset.kerf}mm)`;
+      }
+    });
+
+    // Plain-form ZIP/save buttons can't submit through HTMX directly because
+    // they need to return a binary stream — so post via a temporary form.
+    function postForBinary(action) {
+      const form = document.getElementById("settings-form");
+      const data = new FormData(form);
+      const real = document.createElement("form");
+      real.method = "POST";
+      real.action = action;
+      real.style.display = "none";
+      for (const [k, v] of data.entries()) {
+        const input = document.createElement("input");
+        input.name = k;
+        input.value = v;
+        real.appendChild(input);
+      }
+      document.body.appendChild(real);
+      real.submit();
+      real.remove();
+    }
+    document.querySelectorAll('[hx-post="/download"], [hx-post="/project/save"]').forEach(btn => {
+      btn.removeAttribute("hx-post");
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const action = btn.textContent.includes("ZIP") ? "/download" : "/project/save";
+        postForBinary(action);
+      });
+    });
+
+    // localStorage settings persistence (settings only, not the image).
+    const STORAGE_KEY = "shadowbox.settings.v1";
+    function restoreSettings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        for (const [k, v] of Object.entries(saved)) {
+          const el = document.querySelector(`#settings-form [name="${k}"]`);
+          if (!el) continue;
+          if (el.type === "checkbox") el.checked = !!v;
+          else el.value = v;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    function snapshotSettings() {
+      const form = document.getElementById("settings-form");
+      const out = {};
+      for (const el of form.elements) {
+        if (!el.name || el.name === "token") continue;
+        out[el.name] = el.type === "checkbox" ? el.checked : el.value;
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+    }
+    restoreSettings();
+    document.getElementById("settings-form").addEventListener("change", snapshotSettings);
+  </script>
+</body>
+</html>

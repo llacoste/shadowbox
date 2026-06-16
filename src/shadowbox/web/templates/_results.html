@@ -1,0 +1,47 @@
+<h2>3. Preview</h2>
+
+{% if result.warnings %}
+<div class="preflight">
+  <h3>Pre-flight notes</h3>
+  <ul>
+    {% for w in result.warnings %}
+      <li class="severity-{{ w.severity }}"><strong>[{{ w.severity }}]</strong>
+        layer {{ w.layer or '*' }} &mdash; <em>{{ w.code }}</em>: {{ w.message }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="stack-preview" aria-label="Stacked composite preview">
+  <div class="stack-frame">
+    {% for layer in result.layers %}
+      {% set depth = (loop.index0) %}
+      <div class="stack-layer"
+           style="
+             transform: translate3d({{ depth * 6 }}px, {{ depth * -6 }}px, 0);
+             background: {{ colors[depth] if depth < colors|length else '#cccccc' }};
+             box-shadow: 0 {{ 1 + depth }}px {{ 3 + depth * 2 }}px rgba(0,0,0,0.25);
+             z-index: {{ depth }};
+           ">
+        <div class="stack-mask">{{ layer.svg | safe }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="layer-grid">
+  {% for layer in result.layers %}
+    <figure class="layer-card">
+      <figcaption>Layer {{ layer.index }} / {{ layer.total }}</figcaption>
+      <div class="layer-svg">{{ layer.svg | safe }}</div>
+    </figure>
+  {% endfor %}
+</div>
+
+<p class="muted">Canvas {{ result.canvas_px[0] }}&times;{{ result.canvas_px[1] }}px &rarr;
+  {{ '%.1f' % result.canvas_mm[0] }}&times;{{ '%.1f' % result.canvas_mm[1] }}mm.
+  Kerf {{ '%.2f' % settings.kerf_mm }}mm, min feature {{ '%.2f' % settings.min_feature_mm }}mm.</p>
+
+{% for note in result.notes %}
+  <p class="muted"><em>{{ note }}</em></p>
+{% endfor %}
