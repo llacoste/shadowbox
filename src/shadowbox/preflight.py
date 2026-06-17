@@ -55,14 +55,21 @@ def analyze(
 
     for idx, paths in enumerate(layers, start=1):
         if not paths:
+            # A solid back panel (layer 1) is intentional — it's the back of the
+            # shadow box, especially in depth mode. A solid INTERIOR layer
+            # (anything that's not the first) means the threshold strategy
+            # wasted a slot, which is worth flagging.
+            if idx == 1:
+                continue
             warnings.append(
                 Warning(
                     layer=idx,
                     code="solid_layer",
                     severity="warn",
                     message=(
-                        "Layer has no interior cuts — it'll be a solid sheet. "
-                        "Consider reducing layer count or switching threshold mode."
+                        "Interior layer has no cuts — it'll be a solid sheet wedged "
+                        "between layers that do carry detail. Reduce layer count or "
+                        "switch threshold mode to recover the slot."
                     ),
                 )
             )

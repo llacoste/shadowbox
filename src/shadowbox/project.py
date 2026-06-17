@@ -24,10 +24,13 @@ class ProjectSettings:
     smoothing: int = 2  # 0=off, 1=low, 2=medium (default — good for photos), 3=high
     fit_aspect: bool = True  # treat width_mm/height_mm as a bounding box; preserve image aspect
     material: str | None = None
-    width_mm: float = 200.0
-    height_mm: float = 200.0
+    # Defaults are imperial-friendly: 10x10 inches, 0.5 inch min feature.
+    # Web UI's unit toggle re-displays these in inches for users who think
+    # in imperial; the canonical storage stays in mm.
+    width_mm: float = 254.0  # 10"
+    height_mm: float = 254.0  # 10"
     kerf_mm: float = 0.15
-    min_feature_mm: float = 0.5
+    min_feature_mm: float = 12.7  # 0.5"
     margin_mm: float = 0.0
     invert_layers: tuple[int, ...] = ()
     frame: bool = True

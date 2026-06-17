@@ -5,7 +5,7 @@ from shadowbox.project import ProjectSettings
 
 
 def test_end_to_end_mountains(mountains_bytes: bytes) -> None:
-    settings = ProjectSettings(layers=3, threshold_mode="equal", kerf_mm=0.0)
+    settings = ProjectSettings(layers=3, threshold_mode="equal", kerf_mm=0.0, width_mm=200, height_mm=200)
     result = pipeline.process(mountains_bytes, settings)
     assert len(result.layers) == 3
     for layer in result.layers:
@@ -30,11 +30,16 @@ def test_invert_layers_round_trips_to_svg(mountains_bytes: bytes) -> None:
     assert base.layers[1].svg != inverted.layers[1].svg
 
 
-def test_kerf_zero_when_subpixel_emits_note(line_art_bytes: bytes) -> None:
-    # Tiny kerf relative to canvas resolution → sub-pixel → no compensation but a note.
-    settings = ProjectSettings(layers=2, kerf_mm=0.0001, width_mm=200.0)
-    result = pipeline.process(line_art_bytes, settings)
-    assert any("Kerf" in note for note in result.notes)
+def test_subpixel_kerf_is_clamped_to_one_pixel(line_art_bytes: bytes) -> None:
+    # Tiny kerf relative to canvas resolution used to emit a noisy "no
+    # compensation applied" note. We now clamp to 1 pixel and stay silent —
+    # the user almost never cares about quarter-pixel kerf precision, and
+    # any kerf > 0 should still affect the output.
+    base = pipeline.process(line_art_bytes, ProjectSettings(layers=2, kerf_mm=0.0, width_mm=200.0))
+    nudged = pipeline.process(line_art_bytes, ProjectSettings(layers=2, kerf_mm=0.0001, width_mm=200.0))
+    assert not any("Kerf" in note for note in nudged.notes)
+    # Even a sub-pixel kerf should produce a visibly different result (1px dilation).
+    assert base.layers[0].svg != nudged.layers[0].svg
 
 
 def test_fit_aspect_preserves_image_aspect(flower_bytes: bytes) -> None:

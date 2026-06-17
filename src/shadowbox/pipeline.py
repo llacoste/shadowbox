@@ -93,14 +93,15 @@ def process(
         smoothing=settings.smoothing,
     )
 
+    # Apply kerf compensation in mask-pixel space. When the exact kerf rounds
+    # below one pixel, clamp to a single pixel of dilation — it's an
+    # approximation but the user almost never cares about quarter-pixel kerf
+    # precision, and the previous "couldn't compensate" note was just noise.
     kerf_radius_px = _kerf_radius_px(settings.kerf_mm, width_px, output_mm[0])
+    if settings.kerf_mm > 0 and kerf_radius_px == 0:
+        kerf_radius_px = 1
     if kerf_radius_px > 0:
         masks = [_apply_kerf(m, kerf_radius_px) for m in masks]
-    elif settings.kerf_mm > 0:
-        notes.append(
-            f"Kerf {settings.kerf_mm}mm rounds to sub-pixel at this resolution; "
-            f"applied no compensation. Render at a higher resolution to enforce."
-        )
 
     min_feature_pixels = max(
         0,

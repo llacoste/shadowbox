@@ -73,6 +73,15 @@ def _resolve_kerf(material_key: str, kerf_mm: float | None) -> float:
     return 0.15
 
 
+_MM_PER_IN = 25.4
+
+
+def _to_mm(value: float | None, units: str) -> float | None:
+    if value is None:
+        return None
+    return value * _MM_PER_IN if units == "in" else value
+
+
 def _settings_from_form(
     *,
     layers: int,
@@ -91,7 +100,16 @@ def _settings_from_form(
     frame: bool,
     engrave_numbers: bool,
     layer_colors: str,
+    units: str = "mm",
 ) -> ProjectSettings:
+    # Dimensional inputs arrive in the user's chosen unit; canonical storage
+    # is always mm.
+    width_mm = _to_mm(width_mm, units) or 0.0
+    height_mm = _to_mm(height_mm, units) or 0.0
+    kerf_mm_norm = _to_mm(kerf_mm, units)
+    min_feature_mm = _to_mm(min_feature_mm, units) or 0.0
+    margin_mm = _to_mm(margin_mm, units) or 0.0
+    kerf_mm = kerf_mm_norm
     return ProjectSettings(
         engine=engine,
         threshold_mode=threshold_mode,
@@ -157,15 +175,16 @@ async def process(
     smoothing: int = Form(2),
     fit_aspect: bool = Form(True),
     material_key: str = Form(""),
-    width_mm: float = Form(200.0),
-    height_mm: float = Form(200.0),
+    width_mm: float = Form(254.0),
+    height_mm: float = Form(254.0),
     kerf_mm: float | None = Form(None),
-    min_feature_mm: float = Form(0.5),
+    min_feature_mm: float = Form(12.7),
     margin_mm: float = Form(0.0),
     invert_layers: str = Form(""),
     frame: bool = Form(True),
     engrave_numbers: bool = Form(True),
     layer_colors: str = Form(""),
+    units: str = Form("mm"),
 ) -> HTMLResponse:
     upload = _get_upload(token)
     settings = _settings_from_form(
@@ -185,6 +204,7 @@ async def process(
         frame=frame,
         engrave_numbers=engrave_numbers,
         layer_colors=layer_colors,
+        units=units,
     )
     result = pipeline.process(upload.raw, settings)
     # Default per-layer colors if the user didn't pick: a gentle gray ramp.
@@ -215,15 +235,16 @@ async def download(
     smoothing: int = Form(2),
     fit_aspect: bool = Form(True),
     material_key: str = Form(""),
-    width_mm: float = Form(200.0),
-    height_mm: float = Form(200.0),
+    width_mm: float = Form(254.0),
+    height_mm: float = Form(254.0),
     kerf_mm: float | None = Form(None),
-    min_feature_mm: float = Form(0.5),
+    min_feature_mm: float = Form(12.7),
     margin_mm: float = Form(0.0),
     invert_layers: str = Form(""),
     frame: bool = Form(True),
     engrave_numbers: bool = Form(True),
     layer_colors: str = Form(""),
+    units: str = Form("mm"),
 ) -> StreamingResponse:
     upload = _get_upload(token)
     settings = _settings_from_form(
@@ -243,6 +264,7 @@ async def download(
         frame=frame,
         engrave_numbers=engrave_numbers,
         layer_colors=layer_colors,
+        units=units,
     )
     result = pipeline.process(upload.raw, settings)
     buf = io.BytesIO()
@@ -273,15 +295,16 @@ async def project_save(
     smoothing: int = Form(2),
     fit_aspect: bool = Form(True),
     material_key: str = Form(""),
-    width_mm: float = Form(200.0),
-    height_mm: float = Form(200.0),
+    width_mm: float = Form(254.0),
+    height_mm: float = Form(254.0),
     kerf_mm: float | None = Form(None),
-    min_feature_mm: float = Form(0.5),
+    min_feature_mm: float = Form(12.7),
     margin_mm: float = Form(0.0),
     invert_layers: str = Form(""),
     frame: bool = Form(True),
     engrave_numbers: bool = Form(True),
     layer_colors: str = Form(""),
+    units: str = Form("mm"),
 ) -> StreamingResponse:
     upload = _get_upload(token)
     settings = _settings_from_form(
@@ -301,6 +324,7 @@ async def project_save(
         frame=frame,
         engrave_numbers=engrave_numbers,
         layer_colors=layer_colors,
+        units=units,
     )
     body = to_json(settings, hash_image_bytes(upload.raw))
     base = Path(upload.filename).stem or "shadowbox"

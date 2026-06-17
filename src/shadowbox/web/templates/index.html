@@ -87,6 +87,13 @@
         <div class="section">
           <h3 class="section-title">3. Material &amp; dimensions</h3>
           <div class="field">
+            <label class="field-label">Units</label>
+            <div class="segment">
+              <label><input type="radio" name="units" value="in" checked><span>Inches</span></label>
+              <label><input type="radio" name="units" value="mm"><span>Millimeters</span></label>
+            </div>
+          </div>
+          <div class="field">
             <label class="field-label">Material preset</label>
             <select name="material_key" id="material-select">
               <option value="custom">Custom (set kerf below)</option>
@@ -97,28 +104,28 @@
           </div>
           <div class="field-row">
             <div class="field">
-              <label class="field-label">Max width (mm)</label>
-              <input type="number" name="width_mm" step="0.1" value="200">
+              <label class="field-label">Max width <span class="unit-suffix">(in)</span></label>
+              <input type="number" name="width_mm" data-unit-mm-default="254" step="0.1" value="10">
             </div>
             <div class="field">
-              <label class="field-label">Max height (mm)</label>
-              <input type="number" name="height_mm" step="0.1" value="200">
+              <label class="field-label">Max height <span class="unit-suffix">(in)</span></label>
+              <input type="number" name="height_mm" data-unit-mm-default="254" step="0.1" value="10">
             </div>
           </div>
           <label class="toggle"><input type="checkbox" name="fit_aspect" value="true" checked><span>Fit image aspect inside the bounding box</span></label>
           <div class="field-row">
             <div class="field">
-              <label class="field-label">Kerf (mm)</label>
-              <input type="number" name="kerf_mm" step="0.01" min="0" placeholder="preset">
+              <label class="field-label">Kerf <span class="unit-suffix">(in)</span></label>
+              <input type="number" name="kerf_mm" data-unit-mm-default="" step="0.001" min="0" placeholder="preset">
             </div>
             <div class="field">
-              <label class="field-label">Min feature (mm)</label>
-              <input type="number" name="min_feature_mm" step="0.05" min="0" value="0.5">
+              <label class="field-label">Min feature <span class="unit-suffix">(in)</span></label>
+              <input type="number" name="min_feature_mm" data-unit-mm-default="12.7" step="0.05" min="0" value="0.5">
             </div>
           </div>
           <div class="field">
-            <label class="field-label">Margin (mm) <span style="color:var(--ink-3)">(space between cuts and frame)</span></label>
-            <input type="number" name="margin_mm" step="0.5" min="0" value="0">
+            <label class="field-label">Margin <span class="unit-suffix">(in)</span> <span style="color:var(--ink-3)">(space between cuts and frame)</span></label>
+            <input type="number" name="margin_mm" data-unit-mm-default="0" step="0.05" min="0" value="0">
           </div>
         </div>
 
@@ -261,6 +268,58 @@
     }
     document.getElementById("download-btn").addEventListener("click", () => postBinary("/download"));
     document.getElementById("save-btn").addEventListener("click", () => postBinary("/project/save"));
+
+    // ─── Unit toggle (mm ↔ inches) ───────────────────────────────────
+    // Canonical storage is mm. The UI displays in whatever the user picked;
+    // a hidden form field `units` rides along so the server knows what to
+    // interpret the displayed values as.
+    const MM_PER_IN = 25.4;
+    const unitFields = Array.from(document.querySelectorAll('[data-unit-mm-default]'));
+    function currentUnit() {
+      const el = document.querySelector('#settings-form [name="units"]:checked');
+      return el ? el.value : "in";
+    }
+    function unitSteps(unit) {
+      // Sensible step granularity per field per unit. Anything finer than these
+      // would just produce nonsense input.
+      return {
+        width_mm:        unit === "in" ? "0.1"  : "1",
+        height_mm:       unit === "in" ? "0.1"  : "1",
+        kerf_mm:         unit === "in" ? "0.001" : "0.01",
+        min_feature_mm:  unit === "in" ? "0.05" : "0.5",
+        margin_mm:       unit === "in" ? "0.05" : "1",
+      };
+    }
+    function refreshUnitLabels(unit) {
+      const label = unit === "in" ? "(in)" : "(mm)";
+      document.querySelectorAll('.unit-suffix').forEach(el => { el.textContent = label; });
+      const steps = unitSteps(unit);
+      unitFields.forEach(el => { if (steps[el.name]) el.step = steps[el.name]; });
+    }
+    function convertFieldValues(fromUnit, toUnit) {
+      if (fromUnit === toUnit) return;
+      const factor = (fromUnit === "in" && toUnit === "mm") ? MM_PER_IN
+                  : (fromUnit === "mm" && toUnit === "in") ? (1 / MM_PER_IN) : 1;
+      unitFields.forEach(el => {
+        if (!el.value) return;
+        const n = parseFloat(el.value);
+        if (Number.isNaN(n)) return;
+        // Round to a sensible number of decimals so we don't churn into 9.999999.
+        const decimals = toUnit === "in" ? 3 : 2;
+        el.value = (n * factor).toFixed(decimals).replace(/\.?0+$/, "") || "0";
+      });
+    }
+    let _lastUnit = currentUnit();
+    document.querySelectorAll('#settings-form [name="units"]').forEach(radio => {
+      radio.addEventListener("change", () => {
+        const next = currentUnit();
+        convertFieldValues(_lastUnit, next);
+        refreshUnitLabels(next);
+        _lastUnit = next;
+        snapshotSettings();
+      });
+    });
+    refreshUnitLabels(_lastUnit);
 
     // ─── localStorage settings persistence (not image) ───────────────
     const STORAGE_KEY = "shadowbox.settings.v2";  // bumped: new default palette
