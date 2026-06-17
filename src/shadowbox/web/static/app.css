@@ -318,6 +318,12 @@ body {
 }
 
 /* ─── Composite (front-on, "finished piece") view ─── */
+/* `display: none` on `[hidden]` wins over our display:flex below — without
+   this, all three viewer modes stack visibly. */
+.viewer-composite[hidden],
+.viewer-stack[hidden],
+.viewer-focus[hidden] { display: none !important; }
+
 .viewer-composite {
   display: flex;
   align-items: center;
@@ -550,7 +556,111 @@ body {
   /* Render small in preview */
 }
 
-/* ─────────────────────── Preflight ─────────────────────── */
+/* ─────────────────────── Logs FAB + modal ─────────────────────── */
+.logs-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: var(--ink);
+  color: white;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.logs-fab:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); }
+.logs-fab:active { transform: translateY(0); }
+.logs-fab svg { display: block; }
+.logs-fab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+.logs-fab.is-fresh {
+  animation: logsFlash 1.2s ease-out 5;
+}
+@keyframes logsFlash {
+  0%   { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18), 0 0 0 0 rgba(220, 38, 38, 0.55); }
+  60%  { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18), 0 0 0 14px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18), 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.modal[hidden] { display: none !important; }
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 15, 15, 0.4);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.modal-card {
+  position: relative;
+  background: var(--surface);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.18);
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalIn 0.18s ease-out;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.modal-head h3 { margin: 0; font-size: 1rem; }
+.modal-close {
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  background: transparent;
+  color: var(--ink-2);
+  border: 0;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+.modal-close:hover { color: var(--ink); }
+.modal-body {
+  padding: 1rem 1.25rem 1.25rem;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* ─────────────────────── Preflight (items, used inside the modal) ─────────────────────── */
 .preflight {
   display: grid;
   gap: 0.5rem;

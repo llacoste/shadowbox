@@ -19,11 +19,13 @@
 
       <!-- Upload (its own form so multipart is clean) -->
       <form
+        id="upload-form"
         class="section"
         hx-post="/upload"
         hx-target="#upload-state"
         hx-swap="innerHTML"
         hx-encoding="multipart/form-data"
+        hx-trigger="submit, change from:input[type=file]"
         hx-indicator="#progress-overlay"
         hx-on:htmx:before-request="document.getElementById('progress-text').textContent='Uploading...';"
         hx-on:htmx:after-request="document.getElementById('progress-text').textContent='Generating layers...';"
@@ -32,8 +34,7 @@
         <div class="field">
           <input type="file" name="image" accept="image/*" required id="image-input">
         </div>
-        <button type="submit" class="btn btn-block">Upload</button>
-        <div id="upload-state" class="upload-state">No image uploaded yet.</div>
+        <div id="upload-state" class="upload-state">Pick an image — it uploads automatically.</div>
       </form>
 
       <!-- Settings (separate form, posts to /process) -->

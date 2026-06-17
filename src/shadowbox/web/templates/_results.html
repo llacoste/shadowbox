@@ -1,16 +1,47 @@
-{% if result.warnings %}
-<section class="preflight">
-  {% for w in result.warnings %}
-    <div class="preflight-item {{ w.severity }}">
-      <span class="severity">{{ w.severity }}</span>
-      <span class="target">layer {{ w.layer or '*' }} / {{ w.code }}</span>
-      {{ w.message }}
-    </div>
-  {% endfor %}
-</section>
-{% endif %}
-
 {% set total = result.layers|length %}
+{% set log_count = (result.warnings|length) + (result.notes|length) %}
+
+{% if log_count > 0 %}
+<button type="button"
+        class="logs-fab is-fresh"
+        id="logs-fab"
+        aria-label="Open generation logs">
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M2 2h12v2H2V2zm0 4h12v2H2V6zm0 4h8v2H2v-2zm0 4h6v2H2v-2z"/>
+  </svg>
+  <span class="logs-fab-label">Logs</span>
+  <span class="logs-fab-count">{{ log_count }}</span>
+</button>
+
+<div class="modal" id="logs-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-label="Generation logs" aria-modal="true">
+    <header class="modal-head">
+      <h3>Generation logs ({{ log_count }})</h3>
+      <button type="button" class="modal-close" data-close aria-label="Close">&times;</button>
+    </header>
+    <div class="modal-body">
+      {% if result.warnings %}
+        {% for w in result.warnings %}
+          <div class="preflight-item {{ w.severity }}">
+            <span class="severity">{{ w.severity }}</span>
+            <span class="target">layer {{ w.layer or '*' }} / {{ w.code }}</span>
+            {{ w.message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+      {% if result.notes %}
+        {% for note in result.notes %}
+          <div class="preflight-item info">
+            <span class="severity">note</span>
+            {{ note }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <section class="viewer" data-mode="composite" id="viewer">
   <div class="viewer-toolbar">
@@ -97,12 +128,6 @@
   {% endfor %}
 </div>
 
-{% if result.notes %}
-<div class="notes">
-  {% for note in result.notes %}<div class="note">{{ note }}</div>{% endfor %}
-</div>
-{% endif %}
-
 <script>
   (() => {
     const viewer = document.getElementById("viewer");
@@ -165,5 +190,21 @@
       if (e.key === "ArrowLeft")  { showFocus(current - 1); e.preventDefault(); }
       if (e.key === "ArrowRight") { showFocus(current + 1); e.preventDefault(); }
     });
+
+    // ─── Logs modal ────────────────────────────────────────────────
+    const fab   = document.getElementById("logs-fab");
+    const modal = document.getElementById("logs-modal");
+    if (fab && modal) {
+      const openModal  = () => { modal.hidden = false; fab.classList.remove("is-fresh"); };
+      const closeModal = () => { modal.hidden = true; };
+      fab.addEventListener("click", openModal);
+      modal.querySelectorAll("[data-close]").forEach(el => el.addEventListener("click", closeModal));
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !modal.hidden) { closeModal(); e.preventDefault(); }
+      });
+      // The flash class is set server-side via .is-fresh; remove after the
+      // first animation cycle so it doesn't pulse forever.
+      setTimeout(() => fab.classList.remove("is-fresh"), 6000);
+    }
   })();
 </script>
